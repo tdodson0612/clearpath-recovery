@@ -209,15 +209,12 @@ class _DisclaimerPageState extends State<DisclaimerPage> {
                 height: 56,
                 child: ElevatedButton(
                   onPressed: _hasAgreed 
-                      ? () {
-                          // TODO: Log acceptance timestamp
-                          // TODO: Navigate to home/auth
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Agreement logged. Ready to continue.'),
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
+                      ? () async {
+                          // Log acceptance with timestamp
+                          // TODO: Add actual logging when auth service is ready
+                          
+                          // Navigate to home
+                          Navigator.pushReplacementNamed(context, '/home');
                         }
                       : null,
                   style: ElevatedButton.styleFrom(
