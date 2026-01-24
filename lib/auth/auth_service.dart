@@ -1,146 +1,147 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Simple authentication service for MVP
-/// Uses local storage. Will migrate to Supabase later.
+/// Authentication service using Supabase
 class AuthService {
-  static const String _keyIsLoggedIn = 'is_logged_in';
-  static const String _keyUserEmail = 'user_email';
-  static const String _keyDisclaimerAccepted = 'disclaimer_accepted';
-  static const String _keyDisclaimerTimestamp = 'disclaimer_timestamp';
+  final SupabaseClient _supabase = Supabase.instance.client;
+
+  /// Get current user
+  User? get currentUser => _supabase.auth.currentUser;
 
   /// Check if user is logged in
-  Future<bool> isLoggedIn() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_keyIsLoggedIn) ?? false;
-  }
-
-  /// Check if user has accepted disclaimer
-  Future<bool> hasAcceptedDisclaimer() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_keyDisclaimerAccepted) ?? false;
-  }
+  bool get isLoggedIn => _supabase.auth.currentUser != null;
 
   /// Get current user email
-  Future<String?> getUserEmail() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyUserEmail);
+  String? get userEmail => _supabase.auth.currentUser?.email;
+
+  /// Sign up new user
+  Future<AuthResponse> signUp({
+    required String email,
+    required String password,
+    String? fullName,
+  }) async {
+    try {
+      final response = await _supabase.auth.signUp(
+        email: email,
+        password: password,
+        data: {
+          'full_name': fullName ?? '',
+        },
+      );
+
+      return response;
+    } catch (e) {
+      rethrow;
+    }
   }
 
-  /// Log disclaimer acceptance (important for court compliance)
-  Future<void> logDisclaimerAcceptance() async {
-    final prefs = await SharedPreferences.getInstance();
-    final timestamp = DateTime.now().toIso8601String();
-    
-    await prefs.setBool(_keyDisclaimerAccepted, true);
-    await prefs.setString(_keyDisclaimerTimestamp, timestamp);
-  }
-
-  /// Get disclaimer acceptance timestamp
-  Future<String?> getDisclaimerTimestamp() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyDisclaimerTimestamp);
-  }
-
-  /// Sign up (MVP version - no backend yet)
-  Future<AuthResult> signUp({
+  /// Sign in existing user
+  Future<AuthResponse> signIn({
     required String email,
     required String password,
   }) async {
     try {
-      // TODO: Replace with actual API call to Supabase
-      // For MVP, just simulate delay and store locally
-      await Future.delayed(const Duration(seconds: 1));
-
-      // Basic validation
-      if (email.isEmpty || !email.contains('@')) {
-        return AuthResult(
-          success: false,
-          error: 'Invalid email address',
-        );
-      }
-
-      if (password.length < 6) {
-        return AuthResult(
-          success: false,
-          error: 'Password must be at least 6 characters',
-        );
-      }
-
-      // Store user data locally
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_keyIsLoggedIn, true);
-      await prefs.setString(_keyUserEmail, email);
-
-      return AuthResult(success: true);
-    } catch (e) {
-      return AuthResult(
-        success: false,
-        error: 'An error occurred. Please try again.',
+      final response = await _supabase.auth.signInWithPassword(
+        email: email,
+        password: password,
       );
+
+      return response;
+    } catch (e) {
+      rethrow;
     }
   }
 
-  /// Sign in (MVP version - no backend yet)
-  Future<AuthResult> signIn({
-    required String email,
-    required String password,
-  }) async {
-    try {
-      // TODO: Replace with actual API call to Supabase
-      // For MVP, just simulate delay and validate locally
-      await Future.delayed(const Duration(seconds: 1));
-
-      // Basic validation
-      if (email.isEmpty || !email.contains('@')) {
-        return AuthResult(
-          success: false,
-          error: 'Invalid email address',
-        );
-      }
-
-      if (password.isEmpty) {
-        return AuthResult(
-          success: false,
-          error: 'Password is required',
-        );
-      }
-
-      // Store user data locally
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_keyIsLoggedIn, true);
-      await prefs.setString(_keyUserEmail, email);
-
-      return AuthResult(success: true);
-    } catch (e) {
-      return AuthResult(
-        success: false,
-        error: 'An error occurred. Please try again.',
-      );
-    }
-  }
-
-  /// Sign out
+  /// Sign out current user
   Future<void> signOut() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_keyIsLoggedIn, false);
-    await prefs.remove(_keyUserEmail);
-    // Keep disclaimer acceptance - user already agreed
+    try {
+      await _supabase.auth.signOut();
+    } catch (e) {
+      rethrow;
+    }
   }
 
-  /// Clear all data (for testing or account deletion)
-  Future<void> clearAllData() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+  /// Send password reset email
+  Future<void> resetPassword(String email) async {
+    try {
+      await _supabase.auth.resetPasswordForEmail(email);
+    } catch (e) {
+      rethrow;
+    }
   }
-}
 
-/// Result object for authentication operations
-class AuthResult {
-  final bool success;
-  final String? error;
+  /// Update user password
+  Future<UserResponse> updatePassword(String newPassword) async {
+    try {
+      final response = await _supabase.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+      return response;
+    } catch (e) {
+      rethrow;
+    }
+  }
 
-  AuthResult({
-    required this.success,
-    this.error,
-  });
+  /// Get user profile
+  Future<Map<String, dynamic>?> getUserProfile() async {
+    try {
+      final userId = currentUser?.id;
+      if (userId == null) return null;
+
+      final response = await _supabase
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .maybeSingle();
+
+      return response;
+    } catch (e) {
+      print('Error fetching profile: $e');
+      return null;
+    }
+  }
+
+  /// Update user profile
+  Future<void> updateProfile({
+    String? fullName,
+    DateTime? sobrietyDate,
+  }) async {
+    try {
+      final userId = currentUser?.id;
+      if (userId == null) throw Exception('No user logged in');
+
+      final updates = <String, dynamic>{
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      if (fullName != null) updates['full_name'] = fullName;
+      if (sobrietyDate != null) {
+        updates['sobriety_date'] = sobrietyDate.toIso8601String().split('T')[0];
+      }
+
+      await _supabase
+          .from('profiles')
+          .update(updates)
+          .eq('id', userId);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Delete user account
+  Future<void> deleteAccount() async {
+    try {
+      final userId = currentUser?.id;
+      if (userId == null) throw Exception('No user logged in');
+
+      // Note: Supabase doesn't have a direct delete user method via client
+      // This would need to be done via admin API or database trigger
+      // For now, we'll just sign out
+      await signOut();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Stream of auth state changes
+  Stream<AuthState> get authStateChanges => _supabase.auth.onAuthStateChange;
 }

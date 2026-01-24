@@ -1,4 +1,8 @@
+// lib/checkin/daily_checkin_page.dart
+
 import 'package:flutter/material.dart';
+import 'checkin_service.dart';
+import 'checkin_model.dart';
 
 class DailyCheckInPage extends StatefulWidget {
   const DailyCheckInPage({super.key});
@@ -8,6 +12,7 @@ class DailyCheckInPage extends StatefulWidget {
 }
 
 class _DailyCheckInPageState extends State<DailyCheckInPage> {
+  final CheckInService _checkInService = CheckInService();
   final _formKey = GlobalKey<FormState>();
   final _recoveryActionController = TextEditingController();
   
@@ -41,24 +46,42 @@ class _DailyCheckInPageState extends State<DailyCheckInPage> {
       _isSubmitting = true;
     });
 
-    // TODO: Save to database with timestamp
-    // For now, simulate delay
-    await Future.delayed(const Duration(seconds: 1));
+    // Create check-in object
+    final checkIn = DailyCheckIn(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      userId: 'current_user', // TODO: Get from auth
+      date: DateTime.now(),
+      moodRating: _moodRating.toInt(),
+      cravingIntensity: _cravingIntensity.toInt(),
+      substanceUsed: _substanceUsedToday!,
+      recoveryAction: _recoveryActionController.text.trim(),
+      createdAt: DateTime.now(),
+    );
+
+    // Save to local storage
+    final success = await _checkInService.saveCheckIn(checkIn);
 
     if (mounted) {
       setState(() {
         _isSubmitting = false;
       });
 
-      // Show success and go back
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Check-in saved successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      Navigator.pop(context);
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Check-in saved successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, true); // Return true to indicate success
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error saving check-in. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

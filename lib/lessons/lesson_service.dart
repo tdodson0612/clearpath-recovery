@@ -1,16 +1,16 @@
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'lesson_model.dart';
 
-/// Service for managing lessons and progress
-/// MVP: Uses hardcoded lessons and local storage. Will migrate to Supabase later.
+/// Service for managing lessons and progress with Supabase backend
 class LessonService {
-  static const String _keyLessonProgress = 'lesson_progress';
+  final SupabaseClient _supabase = Supabase.instance.client;
 
-  /// Get all 12 weeks of lessons (5 lessons per week)
+  String? get _userId => _supabase.auth.currentUser?.id;
+
+  /// Get all available lessons (hardcoded for now, will move to CMS later)
   List<Lesson> getAllLessons() {
-    // TODO: Load from JSON files or database
-    // For now, return Week 1 as example
+    // For MVP, lessons are hardcoded
+    // In Phase 2, these will come from Supabase/CMS
     return _getWeek1Lessons();
   }
 
@@ -20,85 +20,147 @@ class LessonService {
     return allLessons.where((l) => l.week == week).toList();
   }
 
-  /// Get a specific lesson
-  Lesson? getLesson(int week, int day) {
-    final lessons = getAllLessons();
+  /// Get a specific lesson by ID
+  Lesson? getLessonById(String lessonId) {
+    final allLessons = getAllLessons();
     try {
-      return lessons.firstWhere((l) => l.week == week && l.day == day);
+      return allLessons.firstWhere((l) => l.id == lessonId);
     } catch (e) {
       return null;
     }
   }
 
-  /// Save lesson progress
-  Future<bool> saveProgress(LessonProgress progress) async {
+  /// Get a specific lesson by week and day
+  Lesson? getLesson(int week, int day) {
+    final allLessons = getAllLessons();
     try {
-      final prefs = await SharedPreferences.getInstance();
-      
-      // Get existing progress
-      final allProgress = await getAllProgress();
-      
-      // Remove old progress for this lesson if exists
-      allProgress.removeWhere((p) => 
-          p.week == progress.week && p.day == progress.day);
-      
-      // Add new progress
-      allProgress.add(progress);
-      
-      // Sort by week and day
-      allProgress.sort((a, b) {
-        if (a.week != b.week) return a.week.compareTo(b.week);
-        return a.day.compareTo(b.day);
-      });
-      
-      // Save to storage
-      final jsonList = allProgress.map((p) => p.toJson()).toList();
-      final jsonString = json.encode(jsonList);
-      
-      return await prefs.setString(_keyLessonProgress, jsonString);
+      return allLessons.firstWhere((l) => l.week == week && l.day == day);
     } catch (e) {
-      print('Error saving lesson progress: $e');
+      return null;
+    }
+  }
+
+  /// Mark a lesson as complete
+  Future<bool> markLessonCompleted({
+    required int week,
+    required int day,
+    required int timeSpentMinutes,
+    required Map<String, String> reflectionAnswers,
+  }) async {
+    try {
+      final userId = _userId;
+      if (userId == null) throw Exception('User not authenticated');
+
+      // Generate lesson ID
+      final lessonId = 'w${week}d$day';
+
+      final data = {
+        'user_id': userId,
+        'lesson_id': lessonId,
+        'week': week,
+        'day': day,
+        'completed': true,
+        'time_spent_minutes': timeSpentMinutes,
+        'completed_at': DateTime.now().toIso8601String(),
+        'reflection_answers': reflectionAnswers,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      await _supabase
+          .from('lesson_progress')
+          .upsert(data, onConflict: 'user_id,lesson_id');
+
+      return true;
+    } catch (e) {
+      print('Error marking lesson complete: $e');
       return false;
+    }
+  }
+
+  /// Save lesson progress (for backward compatibility)
+  Future<bool> saveProgress(LessonProgress progress) async {
+    return await markLessonCompleted(
+      week: progress.week,
+      day: progress.day,
+      timeSpentMinutes: progress.timeSpentMinutes,
+      reflectionAnswers: progress.reflectionAnswers ?? {},
+    );
+  }
+
+  /// Get progress for a specific lesson
+  Future<LessonProgress?> getLessonProgress(String lessonId) async {
+    try {
+      final userId = _userId;
+      if (userId == null) return null;
+
+      final response = await _supabase
+          .from('lesson_progress')
+          .select()
+          .eq('user_id', userId)
+          .eq('lesson_id', lessonId)
+          .maybeSingle();
+
+      if (response == null) return null;
+
+      return LessonProgress.fromJson(response);
+    } catch (e) {
+      print('Error getting lesson progress: $e');
+      return null;
+    }
+  }
+
+  /// Get progress for a specific lesson by week and day
+  Future<LessonProgress?> getProgressForLesson(int week, int day) async {
+    try {
+      final userId = _userId;
+      if (userId == null) return null;
+
+      final response = await _supabase
+          .from('lesson_progress')
+          .select()
+          .eq('user_id', userId)
+          .eq('week', week)
+          .eq('day', day)
+          .maybeSingle();
+
+      if (response == null) return null;
+
+      return LessonProgress.fromJson(response);
+    } catch (e) {
+      print('Error getting lesson progress: $e');
+      return null;
     }
   }
 
   /// Get all lesson progress for current user
   Future<List<LessonProgress>> getAllProgress() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final jsonString = prefs.getString(_keyLessonProgress);
-      
-      if (jsonString == null || jsonString.isEmpty) {
-        return [];
-      }
-      
-      final jsonList = json.decode(jsonString) as List;
-      return jsonList
-          .map((json) => LessonProgress.fromJson(json as Map<String, dynamic>))
+      final userId = _userId;
+      if (userId == null) return [];
+
+      final response = await _supabase
+          .from('lesson_progress')
+          .select()
+          .eq('user_id', userId)
+          .order('week')
+          .order('day');
+
+      return (response as List)
+          .map((json) => LessonProgress.fromJson(json))
           .toList();
     } catch (e) {
-      print('Error loading lesson progress: $e');
+      print('Error getting all progress: $e');
       return [];
     }
   }
 
-  /// Get progress for a specific lesson
-  Future<LessonProgress?> getProgressForLesson(int week, int day) async {
-    final allProgress = await getAllProgress();
-    try {
-      return allProgress.firstWhere((p) => p.week == week && p.day == day);
-    } catch (e) {
-      return null;
-    }
-  }
-
-  /// Check if a lesson is completed
+  /// Check if a lesson is completed by week and day
   Future<bool> isLessonCompleted(int week, int day) async {
     final progress = await getProgressForLesson(week, day);
     return progress?.completed ?? false;
   }
 
-  /// Get completed lessons count for current week
+  /// Get completed lessons count for a specific week
   Future<int> getWeeklyCompletedCount(int week) async {
     final allProgress = await getAllProgress();
     return allProgress.where((p) => p.week == week && p.completed).length;
@@ -117,8 +179,9 @@ class LessonService {
     // Find first incomplete lesson
     for (int week = 1; week <= 12; week++) {
       for (int day = 1; day <= 5; day++) {
-        final progress = allProgress.where((p) => 
-            p.week == week && p.day == day).firstOrNull;
+        final progress = allProgress
+            .where((p) => p.week == week && p.day == day)
+            .firstOrNull;
         
         if (progress == null || !progress.completed) {
           return {'week': week, 'day': day};
@@ -130,43 +193,74 @@ class LessonService {
     return {'week': 12, 'day': 5};
   }
 
-  /// Mark lesson as completed
-  Future<bool> markLessonCompleted({
-    required int week,
-    required int day,
-    required int timeSpentMinutes,
-    Map<String, String>? reflectionAnswers,
-  }) async {
-    final lesson = getLesson(week, day);
-    if (lesson == null) return false;
+  /// Get completion percentage for a week
+  Future<double> getWeekCompletionPercentage(int week) async {
+    final weekLessons = getLessonsForWeek(week);
+    if (weekLessons.isEmpty) return 0.0;
 
-    final progress = LessonProgress(
-      id: '${week}_$day',
-      userId: 'current_user', // TODO: Get from auth
-      lessonId: lesson.id,
-      week: week,
-      day: day,
-      completed: true,
-      timeSpentMinutes: timeSpentMinutes,
-      completedAt: DateTime.now(),
-      reflectionAnswers: reflectionAnswers,
-    );
+    int completedCount = 0;
+    for (var lesson in weekLessons) {
+      if (await isLessonCompleted(lesson.week, lesson.day)) {
+        completedCount++;
+      }
+    }
 
-    return await saveProgress(progress);
+    return (completedCount / weekLessons.length) * 100;
+  }
+
+  /// Get overall completion percentage
+  Future<double> getOverallCompletionPercentage() async {
+    final allLessons = getAllLessons();
+    if (allLessons.isEmpty) return 0.0;
+
+    int completedCount = 0;
+    for (var lesson in allLessons) {
+      if (await isLessonCompleted(lesson.week, lesson.day)) {
+        completedCount++;
+      }
+    }
+
+    return (completedCount / allLessons.length) * 100;
+  }
+
+  /// Get next incomplete lesson
+  Future<Lesson?> getNextLesson() async {
+    final allLessons = getAllLessons();
+    
+    for (var lesson in allLessons) {
+      if (!await isLessonCompleted(lesson.week, lesson.day)) {
+        return lesson;
+      }
+    }
+    
+    return null;
+  }
+
+  /// Get total lessons completed count
+  Future<int> getTotalLessonsCompleted() async {
+    final allProgress = await getAllProgress();
+    return allProgress.where((p) => p.completed).length;
   }
 
   /// Clear all progress (for testing or reset)
   Future<bool> clearAllProgress() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      return await prefs.remove(_keyLessonProgress);
+      final userId = _userId;
+      if (userId == null) return false;
+
+      await _supabase
+          .from('lesson_progress')
+          .delete()
+          .eq('user_id', userId);
+
+      return true;
     } catch (e) {
       print('Error clearing progress: $e');
       return false;
     }
   }
 
-  /// Week 1 Lessons (Example data structure)
+  /// Week 1 Lessons (hardcoded content)
   List<Lesson> _getWeek1Lessons() {
     return [
       Lesson(
@@ -407,7 +501,7 @@ Before you move on, take a moment to acknowledge yourself for showing up this we
   }
 }
 
-// Extension to get first element or null (used above)
+// Extension to get first element or null
 extension FirstWhereOrNullExtension<E> on Iterable<E> {
   E? get firstOrNull => isEmpty ? null : first;
 }

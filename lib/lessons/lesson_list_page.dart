@@ -9,11 +9,14 @@ class LessonListPage extends StatefulWidget {
   State<LessonListPage> createState() => _LessonListPageState();
 }
 
-class _LessonListPageState extends State<LessonListPage> {
+class _LessonListPageState extends State<LessonListPage> with AutomaticKeepAliveClientMixin {
   final LessonService _lessonService = LessonService();
   List<Lesson> _lessons = [];
   Map<String, bool> _completionStatus = {};
   bool _isLoading = true;
+
+  @override
+  bool get wantKeepAlive => true; // Keep state alive
 
   @override
   void initState() {
@@ -46,8 +49,22 @@ class _LessonListPageState extends State<LessonListPage> {
     });
   }
 
+  Future<void> _navigateToLesson(Lesson lesson) async {
+    final result = await Navigator.pushNamed(
+      context,
+      '/lesson/${lesson.week}/${lesson.day}',
+    );
+
+    // Reload if lesson was completed
+    if (result == true) {
+      await _loadLessons();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
@@ -63,26 +80,30 @@ class _LessonListPageState extends State<LessonListPage> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _lessons.length + 1,
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return _buildHeader();
-                }
+          : RefreshIndicator(
+              onRefresh: _loadLessons,
+              child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                itemCount: _lessons.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return _buildHeader();
+                  }
 
-                final lesson = _lessons[index - 1];
-                final isCompleted = _completionStatus['${lesson.week}_${lesson.day}'] ?? false;
-                final isFirstOfWeek = lesson.day == 1;
+                  final lesson = _lessons[index - 1];
+                  final isCompleted = _completionStatus['${lesson.week}_${lesson.day}'] ?? false;
+                  final isFirstOfWeek = lesson.day == 1;
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (isFirstOfWeek) _buildWeekHeader(lesson.week),
-                    _buildLessonCard(lesson, isCompleted),
-                  ],
-                );
-              },
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (isFirstOfWeek) _buildWeekHeader(lesson.week),
+                      _buildLessonCard(lesson, isCompleted),
+                    ],
+                  );
+                },
+              ),
             ),
     );
   }
@@ -177,12 +198,7 @@ class _LessonListPageState extends State<LessonListPage> {
         ),
       ),
       child: InkWell(
-        onTap: () {
-          // TODO: Navigate to lesson detail page
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Opening: ${lesson.title}')),
-          );
-        },
+        onTap: () => _navigateToLesson(lesson),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),

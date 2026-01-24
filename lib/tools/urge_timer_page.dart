@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 class UrgeTimerPage extends StatefulWidget {
   const UrgeTimerPage({super.key});
@@ -10,23 +12,202 @@ class UrgeTimerPage extends StatefulWidget {
 
 class _UrgeTimerPageState extends State<UrgeTimerPage> {
   Timer? _timer;
-  int _remainingSeconds = 600; // Default 10 minutes
+  int _remainingSeconds = 600;
   int _totalSeconds = 600;
   bool _isRunning = false;
   bool _isComplete = false;
+  bool _showIntensityDialog = false;
+  
+  // Intensity tracking
+  int? _initialIntensity;
+  int? _finalIntensity;
+  
+  // Statistics
+  int _totalSessions = 0;
+  int _successfulSessions = 0;
+  double _averageReduction = 0.0;
 
-  final List<int> _presetTimes = [
-    300,  // 5 minutes
-    600,  // 10 minutes
-    900,  // 15 minutes
-    1200, // 20 minutes
-    1800, // 30 minutes
-  ];
+  final List<int> _presetTimes = [300, 600, 900, 1200, 1800];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatistics();
+  }
 
   @override
   void dispose() {
     _timer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadStatistics() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _totalSessions = prefs.getInt('urge_timer_total') ?? 0;
+      _successfulSessions = prefs.getInt('urge_timer_successful') ?? 0;
+      _averageReduction = prefs.getDouble('urge_timer_avg_reduction') ?? 0.0;
+    });
+  }
+
+  Future<void> _saveSession(bool completed) async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    final total = _totalSessions + 1;
+    final successful = completed ? _successfulSessions + 1 : _successfulSessions;
+    
+    double newAvgReduction = _averageReduction;
+    if (completed && _finalIntensity != null && _initialIntensity != null) {
+      final reduction = (_initialIntensity! - _finalIntensity!).toDouble();
+      newAvgReduction = ((_averageReduction * _successfulSessions) + reduction) / successful;
+    }
+    
+    await prefs.setInt('urge_timer_total', total);
+    await prefs.setInt('urge_timer_successful', successful);
+    await prefs.setDouble('urge_timer_avg_reduction', newAvgReduction);
+    
+    final history = prefs.getStringList('urge_timer_history') ?? [];
+    final session = {
+      'timestamp': DateTime.now().toIso8601String(),
+      'duration': _totalSeconds ~/ 60,
+      'completed': completed,
+      'initial_intensity': _initialIntensity,
+      'final_intensity': _finalIntensity,
+    };
+    history.add(json.encode(session));
+    
+    if (history.length > 50) {
+      history.removeAt(0);
+    }
+    
+    await prefs.setStringList('urge_timer_history', history);
+    
+    setState(() {
+      _totalSessions = total;
+      _successfulSessions = successful;
+      _averageReduction = newAvgReduction;
+    });
+  }
+
+  void _showInitialIntensityDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Rate Your Urge'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'How strong is your craving right now?',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 24),
+            ...List.generate(10, (index) {
+              final rating = index + 1;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _initialIntensity = rating;
+                      });
+                      Navigator.pop(context);
+                      _startTimer();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: rating <= 3
+                          ? const Color(0xFF10B981)
+                          : rating <= 6
+                              ? const Color(0xFFF59E0B)
+                              : const Color(0xFFDC2626),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(
+                      '$rating - ${_getIntensityLabel(rating)}',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showFinalIntensityDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('How Do You Feel Now?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Rate your craving intensity after waiting:',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 24),
+            ...List.generate(10, (index) {
+              final rating = index + 1;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      setState(() {
+                        _finalIntensity = rating;
+                      });
+                      Navigator.pop(context);
+                      await _saveSession(true);
+                      
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              _initialIntensity! > rating
+                                  ? 'Great job! Your craving decreased by ${_initialIntensity! - rating} points!'
+                                  : 'You made it through! That takes strength.',
+                            ),
+                            backgroundColor: const Color(0xFF10B981),
+                          ),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: rating <= 3
+                          ? const Color(0xFF10B981)
+                          : rating <= 6
+                              ? const Color(0xFFF59E0B)
+                              : const Color(0xFFDC2626),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(
+                      '$rating - ${_getIntensityLabel(rating)}',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getIntensityLabel(int rating) {
+    if (rating <= 2) return 'Very Mild';
+    if (rating <= 4) return 'Mild';
+    if (rating <= 6) return 'Moderate';
+    if (rating <= 8) return 'Strong';
+    return 'Very Strong';
   }
 
   void _startTimer() {
@@ -59,6 +240,8 @@ class _UrgeTimerPageState extends State<UrgeTimerPage> {
       _isRunning = false;
       _isComplete = false;
       _remainingSeconds = _totalSeconds;
+      _initialIntensity = null;
+      _finalIntensity = null;
     });
   }
 
@@ -69,6 +252,7 @@ class _UrgeTimerPageState extends State<UrgeTimerPage> {
       _isComplete = true;
       _remainingSeconds = 0;
     });
+    _showFinalIntensityDialog();
   }
 
   void _setTime(int seconds) {
@@ -114,7 +298,7 @@ class _UrgeTimerPageState extends State<UrgeTimerPage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Header info
+            // Header
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -152,6 +336,52 @@ class _UrgeTimerPageState extends State<UrgeTimerPage> {
               padding: const EdgeInsets.all(24.0),
               child: Column(
                 children: [
+                  // Statistics card
+                  if (_totalSessions > 0) ...[
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: Column(
+                        children: [
+                          const Text(
+                            'Your Progress',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1F2937),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _buildStatItem(
+                                'Total Sessions',
+                                _totalSessions.toString(),
+                                Icons.timer,
+                              ),
+                              _buildStatItem(
+                                'Completed',
+                                _successfulSessions.toString(),
+                                Icons.check_circle,
+                              ),
+                              _buildStatItem(
+                                'Avg Drop',
+                                '${_averageReduction.toStringAsFixed(1)} pts',
+                                Icons.trending_down,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
                   // Timer display
                   Container(
                     width: double.infinity,
@@ -169,6 +399,29 @@ class _UrgeTimerPageState extends State<UrgeTimerPage> {
                     ),
                     child: Column(
                       children: [
+                        // Initial intensity display
+                        if (_initialIntensity != null && !_isComplete) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3F2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'Starting intensity: $_initialIntensity/10',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFFEA580C),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+
                         // Circular progress
                         SizedBox(
                           width: 200,
@@ -229,6 +482,63 @@ class _UrgeTimerPageState extends State<UrgeTimerPage> {
                           ),
                         ),
 
+                        // Results display
+                        if (_isComplete &&
+                            _initialIntensity != null &&
+                            _finalIntensity != null) ...[
+                          const SizedBox(height: 20),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFECFDF5),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      '$_initialIntensity',
+                                      style: const TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFFDC2626),
+                                      ),
+                                    ),
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 12),
+                                      child: Icon(
+                                        Icons.arrow_forward,
+                                        color: Color(0xFF10B981),
+                                      ),
+                                    ),
+                                    Text(
+                                      '$_finalIntensity',
+                                      style: const TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF10B981),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _initialIntensity! > _finalIntensity!
+                                      ? 'Craving dropped ${_initialIntensity! - _finalIntensity!} points!'
+                                      : 'You made it through!',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.green[800],
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+
                         const SizedBox(height: 32),
 
                         // Control buttons
@@ -236,8 +546,9 @@ class _UrgeTimerPageState extends State<UrgeTimerPage> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             if (!_isComplete) ...[
-                              // Reset button
-                              if (_isRunning || _remainingSeconds != _totalSeconds)
+                              if (_isRunning ||
+                                  (_remainingSeconds != _totalSeconds &&
+                                      _initialIntensity != null))
                                 IconButton(
                                   onPressed: _resetTimer,
                                   icon: const Icon(Icons.refresh),
@@ -245,9 +556,16 @@ class _UrgeTimerPageState extends State<UrgeTimerPage> {
                                   color: const Color(0xFF6B7280),
                                 ),
                               const SizedBox(width: 16),
-                              // Play/Pause button
                               ElevatedButton(
-                                onPressed: _isRunning ? _pauseTimer : _startTimer,
+                                onPressed: () {
+                                  if (_isRunning) {
+                                    _pauseTimer();
+                                  } else if (_initialIntensity == null) {
+                                    _showInitialIntensityDialog();
+                                  } else {
+                                    _startTimer();
+                                  }
+                                },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: _isRunning
                                       ? const Color(0xFF6B7280)
@@ -310,7 +628,7 @@ class _UrgeTimerPageState extends State<UrgeTimerPage> {
                   const SizedBox(height: 24),
 
                   // Time presets
-                  if (!_isRunning && !_isComplete) ...[
+                  if (!_isRunning && !_isComplete && _initialIntensity == null) ...[
                     const Text(
                       'Choose Duration',
                       style: TextStyle(
@@ -338,7 +656,9 @@ class _UrgeTimerPageState extends State<UrgeTimerPage> {
                           selectedColor: const Color(0xFFEA580C),
                           backgroundColor: Colors.white,
                           labelStyle: TextStyle(
-                            color: isSelected ? Colors.white : const Color(0xFF6B7280),
+                            color: isSelected
+                                ? Colors.white
+                                : const Color(0xFF6B7280),
                             fontWeight: FontWeight.w600,
                           ),
                           side: BorderSide(
@@ -400,7 +720,7 @@ class _UrgeTimerPageState extends State<UrgeTimerPage> {
                     ),
                   ),
 
-                  if (_isComplete) ...[
+                  if (_isComplete && _finalIntensity != null) ...[
                     const SizedBox(height: 24),
                     Container(
                       padding: const EdgeInsets.all(20),
@@ -445,6 +765,31 @@ class _UrgeTimerPageState extends State<UrgeTimerPage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildStatItem(String label, String value, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, color: const Color(0xFFEA580C), size: 24),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1F2937),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Color(0xFF6B7280),
+          ),
+        ),
+      ],
     );
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../auth/auth_service.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -20,7 +21,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _loadUserInfo() async {
-    final email = await _authService.getUserEmail();
+    // Get email directly from Supabase
+    final email = Supabase.instance.client.auth.currentUser?.email;
     setState(() {
       _userEmail = email;
       _isLoading = false;
