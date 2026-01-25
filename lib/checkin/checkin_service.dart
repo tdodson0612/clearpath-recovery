@@ -1,3 +1,4 @@
+//checkin_service.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'checkin_model.dart';
 

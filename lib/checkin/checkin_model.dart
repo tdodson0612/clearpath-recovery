@@ -1,3 +1,4 @@
+//checkin_model.dart
 /// Model for daily check-in data
 /// This represents a single day's check-in entry
 class DailyCheckIn {
