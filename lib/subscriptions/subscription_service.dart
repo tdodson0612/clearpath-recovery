@@ -19,16 +19,12 @@ class SubscriptionService {
 
     try {
       final configuration = PurchasesConfiguration(apiKey);
-      if (appUserId != null) {
-        configuration.appUserID = appUserId;
-      }
+      if (appUserId != null) configuration.appUserID = appUserId;
 
       await Purchases.configure(configuration);
       _isConfigured = true;
 
-      if (kDebugMode) {
-        await Purchases.setLogLevel(LogLevel.debug);
-      }
+      if (kDebugMode) await Purchases.setLogLevel(LogLevel.debug);
 
       await refreshCustomerInfo();
     } catch (e) {
@@ -50,79 +46,50 @@ class SubscriptionService {
 
   /// Check if user has active subscription
   Future<bool> hasActiveSubscription() async {
-    try {
-      final info = await refreshCustomerInfo();
-      if (info == null) return false;
-
-      return info.entitlements.active.isNotEmpty;
-    } catch (e) {
-      print('Error checking subscription: $e');
-      return false;
-    }
+    final info = await refreshCustomerInfo();
+    if (info == null) return false;
+    return info.entitlements.active.isNotEmpty;
   }
 
   /// Check if user is in trial period
   Future<bool> isInTrialPeriod() async {
-    try {
-      final info = await refreshCustomerInfo();
-      if (info == null) return false;
+    final info = await refreshCustomerInfo();
+    if (info == null) return false;
 
-      for (var entitlement in info.entitlements.active.values) {
-        if (entitlement.periodType == PeriodType.trial) {
-          return true;
-        }
-      }
-
-      return false;
-    } catch (e) {
-      print('Error checking trial: $e');
-      return false;
+    for (var entitlement in info.entitlements.active.values) {
+      if (entitlement.periodType == PeriodType.trial) return true;
     }
+    return false;
   }
 
   /// Check if any active subscription is in grace period
   Future<bool> isInGracePeriod() async {
-    try {
-      final info = await refreshCustomerInfo();
-      if (info == null) return false;
+    final info = await refreshCustomerInfo();
+    if (info == null) return false;
 
-      // Loop active entitlements
-      for (var entitlement in info.entitlements.active.values) {
-        // Grace period logic: user unsubscribed but subscription still valid
-        final isUnsubscribed = entitlement.unsubscribeDetectedAt != null;
-        final expirationStr = entitlement.expirationDate;
-        if (isUnsubscribed && expirationStr != null) {
-          final expiration = DateTime.parse(expirationStr);
-          if (expiration.isAfter(DateTime.now())) {
-            return true;
-          }
-        }
+    for (var entitlement in info.entitlements.active.values) {
+      final isUnsubscribed = entitlement.unsubscribeDetectedAt != null;
+      final expirationStr = entitlement.expirationDate;
+      if (isUnsubscribed && expirationStr != null) {
+        final expiration = DateTime.parse(expirationStr);
+        if (expiration.isAfter(DateTime.now())) return true;
       }
-
-      return false;
-    } catch (e) {
-      print('Error checking grace period: $e');
-      return false;
     }
+    return false;
   }
 
   /// Get subscription expiration date
   Future<DateTime?> getSubscriptionExpirationDate() async {
-    try {
-      final info = await refreshCustomerInfo();
-      if (info == null) return null;
+    final info = await refreshCustomerInfo();
+    if (info == null) return null;
 
-      final entitlements = info.entitlements.active.values;
-      if (entitlements.isEmpty) return null;
+    final entitlements = info.entitlements.active.values;
+    if (entitlements.isEmpty) return null;
 
-      final expirationStr = entitlements.first.expirationDate;
-      if (expirationStr == null) return null;
+    final expirationStr = entitlements.first.expirationDate;
+    if (expirationStr == null) return null;
 
-      return DateTime.parse(expirationStr);
-    } catch (e) {
-      print('Error getting expiration date: $e');
-      return null;
-    }
+    return DateTime.parse(expirationStr);
   }
 
   /// Get available offerings
@@ -138,10 +105,10 @@ class SubscriptionService {
   /// Purchase a package
   Future<CustomerInfo?> purchasePackage(Package package) async {
     try {
-      final info = await Purchases.purchasePackage(package);
-      _customerInfo = info;
-      return info;
-    } on PurchasesErrorCode catch (e) {
+      final PurchaseResult result = await Purchases.purchasePackage(package);
+      _customerInfo = result.customerInfo;
+      return result.customerInfo;
+    } on PurchasesErrorCode catch (_) {
       rethrow;
     } catch (e) {
       print('Error purchasing package: $e');
@@ -152,7 +119,8 @@ class SubscriptionService {
   /// Restore previous purchases
   Future<CustomerInfo?> restorePurchases() async {
     try {
-      final info = await Purchases.restorePurchases();
+      // restorePurchases now returns CustomerInfo directly
+      final CustomerInfo info = await Purchases.restorePurchases();
       _customerInfo = info;
       return info;
     } catch (e) {

@@ -38,7 +38,7 @@ dependencies:
   supabase_flutter: ^2.8.0
 
   # RevenueCat
-  purchases_flutter: ^4.7.0
+  purchases_flutter: ^9.10.7
 
 
 dev_dependencies:
