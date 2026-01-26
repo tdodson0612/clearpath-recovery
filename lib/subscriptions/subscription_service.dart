@@ -102,12 +102,16 @@ class SubscriptionService {
     }
   }
 
-  /// Purchase a package
+  /// Purchase a package using the new API
   Future<CustomerInfo?> purchasePackage(Package package) async {
     try {
-      final PurchaseResult result = await Purchases.purchasePackage(package);
-      _customerInfo = result.customerInfo;
-      return result.customerInfo;
+      // Use the named constructor for Package
+      final purchaseResult = await Purchases.purchase(
+        PurchaseParams.package(package),
+      );
+
+      _customerInfo = purchaseResult.customerInfo;
+      return _customerInfo;
     } on PurchasesErrorCode catch (_) {
       rethrow;
     } catch (e) {
@@ -116,16 +120,17 @@ class SubscriptionService {
     }
   }
 
-  /// Restore previous purchases
+
+  /// Restore previous purchases (still returns CustomerInfo directly)
   Future<CustomerInfo?> restorePurchases() async {
     try {
-      // restorePurchases now returns CustomerInfo directly
-      final CustomerInfo info = await Purchases.restorePurchases();
+      final info = await Purchases.restorePurchases();
       _customerInfo = info;
-      return info;
+      return _customerInfo;
     } catch (e) {
       print('Error restoring purchases: $e');
       return null;
     }
   }
+
 }
