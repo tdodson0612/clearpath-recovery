@@ -18,6 +18,9 @@ import 'tools/thought_challenge_page.dart';
 import 'tools/prevention_plan_page.dart';
 import 'tools/crisis_resources_page.dart';
 import 'settings/settings_page.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
