@@ -16,7 +16,7 @@ plugins {
 
 android {
     namespace = "com.TheScanMan.clearpathrecovery"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -31,24 +31,31 @@ android {
     defaultConfig {
         applicationId = "com.TheScanMan.clearpathrecovery"
         minSdk = flutter.minSdkVersion
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        targetSdk = 36
+        versionCode = 2
+        versionName = "1.0.1"
     }
 
     signingConfigs {
         create("release") {
             keyAlias = keystoreProperties.getProperty("keyAlias") ?: ""
             keyPassword = keystoreProperties.getProperty("keyPassword") ?: ""
-            
+            storePassword = keystoreProperties.getProperty("storePassword") ?: ""
+
             val storeFilePath = keystoreProperties.getProperty("storeFile")
             if (!storeFilePath.isNullOrEmpty()) {
-                storeFile = rootProject.file(storeFilePath)
+                val file = rootProject.file(storeFilePath)
+                if (file.exists()) {
+                    storeFile = file
+                } else {
+                    println("WARNING: Keystore file not found at $storeFilePath")
+                }
+            } else {
+                println("WARNING: storeFile property is missing in key.properties")
             }
-
-            storePassword = keystoreProperties.getProperty("storePassword") ?: ""
         }
     }
+
 
 
 
