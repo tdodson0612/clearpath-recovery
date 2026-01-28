@@ -1,3 +1,5 @@
+//lib/subscriptions/subscription_guard.dart
+
 import 'package:flutter/material.dart';
 import 'subscription_service.dart';
 
