@@ -1,4 +1,4 @@
-//lib/subscriptions/subscription_service.dart
+// lib/subscriptions/subscription_service.dart
 
 import 'package:flutter/foundation.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
@@ -122,7 +122,6 @@ class SubscriptionService {
     }
   }
 
-
   /// Restore previous purchases (still returns CustomerInfo directly)
   Future<CustomerInfo?> restorePurchases() async {
     try {
@@ -134,5 +133,4 @@ class SubscriptionService {
       return null;
     }
   }
-
 }

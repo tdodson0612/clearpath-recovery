@@ -1,4 +1,4 @@
-//lib/subscriptions/paywall_page.dart
+// lib/subscriptions/paywall_page.dart
 
 import 'package:flutter/material.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
