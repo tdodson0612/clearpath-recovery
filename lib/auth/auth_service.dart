@@ -1,3 +1,5 @@
+//lib/auth/auth_service.dart
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Authentication service using Supabase

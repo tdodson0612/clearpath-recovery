@@ -18,6 +18,7 @@ import 'tools/thought_challenge_page.dart';
 import 'tools/prevention_plan_page.dart';
 import 'tools/crisis_resources_page.dart';
 import 'settings/settings_page.dart';
+import 'testing_dashboard_page.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -118,6 +119,8 @@ class ClearPathApp extends StatelessWidget {
             return MaterialPageRoute(builder: (context) => const CrisisResourcesPage());
           case '/settings':
             return MaterialPageRoute(builder: (context) => const SettingsPage());
+          case '/testing-dashboard':
+            return MaterialPageRoute(builder: (context) => const TestingDashboardPage());
           default:
             return null;
         }

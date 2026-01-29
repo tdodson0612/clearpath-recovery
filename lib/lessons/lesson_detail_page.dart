@@ -1,3 +1,5 @@
+//lib/lessons/lesson_detail_page.dart
+
 import 'package:flutter/material.dart';
 import 'lesson_model.dart';
 import 'lesson_service.dart';

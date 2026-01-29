@@ -1,3 +1,5 @@
+//lib/lessons/lesson_service.dart
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'lesson_model.dart';
 import 'weeks/week_1_lessons.dart';
