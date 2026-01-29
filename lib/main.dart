@@ -26,29 +26,235 @@ import 'package:flutter/services.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Load environment variables
-  await dotenv.load(fileName: ".env");
+  String? initializationError;
   
-  // Initialize Supabase
-  await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
-  );
-
-  // Initialize RevenueCat
-  // Add your RevenueCat API keys to .env file:
-  // REVENUECAT_API_KEY_IOS=your_ios_key
-  // REVENUECAT_API_KEY_ANDROID=your_android_key
-  final revenueCatKey = dotenv.env['REVENUECAT_API_KEY'] ?? '';
-  if (revenueCatKey.isNotEmpty) {
+  try {
+    debugPrint('=== ClearPath Recovery Initialization Started ===');
+    
+    // Step 1: Load environment variables
+    debugPrint('Step 1: Loading .env file...');
     try {
-      await SubscriptionService().initialize(apiKey: revenueCatKey);
+      await dotenv.load(fileName: ".env");
+      debugPrint('✓ .env file loaded successfully');
     } catch (e) {
-      print('Failed to initialize RevenueCat: $e');
+      debugPrint('✗ Failed to load .env file: $e');
+      debugPrint('Will attempt to use hardcoded fallback values');
     }
-  }
+    
+    // Step 2: Get Supabase credentials (with fallback)
+    debugPrint('Step 2: Getting Supabase credentials...');
+    final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? 'https://viuhhlcudemiadwkfedi.supabase.co';
+    final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? 'sb_publishable_V1Ry4vNMSiqRkAri2XiyqA_q90BAWEz';
+    
+    debugPrint('Supabase URL: $supabaseUrl');
+    debugPrint('Supabase Key length: ${supabaseAnonKey.length} characters');
+    
+    if (supabaseUrl.isEmpty) {
+      throw Exception('SUPABASE_URL is empty');
+    }
+    
+    if (supabaseAnonKey.isEmpty) {
+      throw Exception('SUPABASE_ANON_KEY is empty');
+    }
+    
+    // Step 3: Initialize Supabase
+    debugPrint('Step 3: Initializing Supabase...');
+    try {
+      await Supabase.initialize(
+        url: supabaseUrl,
+        anonKey: supabaseAnonKey,
+      );
+      debugPrint('✓ Supabase initialized successfully');
+    } catch (e) {
+      debugPrint('✗ Supabase initialization failed: $e');
+      throw Exception('Supabase initialization failed: $e');
+    }
 
-  runApp(const ClearPathApp());
+    // Step 4: Initialize RevenueCat (OPTIONAL - commented out for testing)
+    debugPrint('Step 4: RevenueCat initialization (skipped for testing)');
+    // Uncomment below after verifying Supabase works:
+    /*
+    final revenueCatKey = dotenv.env['REVENUECAT_API_KEY'] ?? '';
+    if (revenueCatKey.isNotEmpty) {
+      debugPrint('RevenueCat key found, initializing...');
+      try {
+        await SubscriptionService().initialize(apiKey: revenueCatKey);
+        debugPrint('✓ RevenueCat initialized successfully');
+      } catch (e) {
+        debugPrint('✗ RevenueCat initialization failed: $e');
+        // Don't crash the app if RevenueCat fails
+      }
+    } else {
+      debugPrint('RevenueCat API key not found, skipping');
+    }
+    */
+
+    debugPrint('=== Initialization Complete - Starting App ===');
+    runApp(const ClearPathApp());
+    
+  } catch (e, stackTrace) {
+    // Detailed error logging
+    debugPrint('=== FATAL INITIALIZATION ERROR ===');
+    debugPrint('Error: $e');
+    debugPrint('Stack trace: $stackTrace');
+    debugPrint('===================================');
+    
+    // Show error screen to user
+    runApp(MaterialApp(
+      home: ErrorScreen(
+        error: e.toString(),
+        stackTrace: stackTrace.toString(),
+      ),
+    ));
+  }
+}
+
+// Detailed error screen for debugging
+class ErrorScreen extends StatelessWidget {
+  final String error;
+  final String stackTrace;
+  
+  const ErrorScreen({
+    super.key,
+    required this.error,
+    required this.stackTrace,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                color: Colors.red,
+                size: 64,
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'App Initialization Failed',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Error Details:',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Text(
+                  error,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Common Solutions:',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _buildSolution('1. Check your internet connection'),
+              _buildSolution('2. Verify Supabase credentials are correct'),
+              _buildSolution('3. Clear app cache and try again'),
+              _buildSolution('4. Reinstall the app'),
+              const SizedBox(height: 20),
+              if (kDebugMode) ...[
+                ExpansionTile(
+                  title: const Text(
+                    'Stack Trace (Debug Only)',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: SelectableText(
+                        stackTrace,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    // Try to restart the app
+                    SystemNavigator.pop();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: const Text(
+                    'Close App',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildSolution(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.check_circle_outline, size: 16, color: Colors.green),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // Global Supabase client accessor
@@ -204,7 +410,7 @@ class _OnboardingCheckWrapperState extends State<OnboardingCheckWrapper> {
         _isLoading = false;
       });
     } catch (e) {
-      print('Error checking onboarding status: $e');
+      debugPrint('Error checking onboarding status: $e');
       setState(() => _isLoading = false);
     }
   }

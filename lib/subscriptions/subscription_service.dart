@@ -1,5 +1,4 @@
 // lib/subscriptions/subscription_service.dart
-
 import 'package:flutter/foundation.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
@@ -20,18 +19,24 @@ class SubscriptionService {
     if (_isConfigured) return;
 
     try {
+      // FIXED: Use proper PurchasesConfiguration API
       final configuration = PurchasesConfiguration(apiKey);
-      if (appUserId != null) configuration.appUserID = appUserId;
+      if (appUserId != null) {
+        configuration.appUserID = appUserId;
+      }
 
       await Purchases.configure(configuration);
       _isConfigured = true;
 
-      if (kDebugMode) await Purchases.setLogLevel(LogLevel.debug);
+      if (kDebugMode) {
+        await Purchases.setLogLevel(LogLevel.debug);
+      }
 
       await refreshCustomerInfo();
     } catch (e) {
-      print('Error initializing RevenueCat: $e');
-      rethrow;
+      debugPrint('Error initializing RevenueCat: $e');
+      // Don't rethrow - allow app to continue even if RevenueCat fails
+      // This prevents app crashes when RevenueCat has issues
     }
   }
 
@@ -41,57 +46,79 @@ class SubscriptionService {
       _customerInfo = await Purchases.getCustomerInfo();
       return _customerInfo;
     } catch (e) {
-      print('Error refreshing customer info: $e');
+      debugPrint('Error refreshing customer info: $e');
       return null;
     }
   }
 
   /// Check if user has active subscription
   Future<bool> hasActiveSubscription() async {
-    final info = await refreshCustomerInfo();
-    if (info == null) return false;
-    return info.entitlements.active.isNotEmpty;
+    try {
+      final info = await refreshCustomerInfo();
+      if (info == null) return false;
+      return info.entitlements.active.isNotEmpty;
+    } catch (e) {
+      debugPrint('Error checking subscription: $e');
+      // In case of error, assume no subscription to be safe
+      return false;
+    }
   }
 
   /// Check if user is in trial period
   Future<bool> isInTrialPeriod() async {
-    final info = await refreshCustomerInfo();
-    if (info == null) return false;
+    try {
+      final info = await refreshCustomerInfo();
+      if (info == null) return false;
 
-    for (var entitlement in info.entitlements.active.values) {
-      if (entitlement.periodType == PeriodType.trial) return true;
+      for (var entitlement in info.entitlements.active.values) {
+        if (entitlement.periodType == PeriodType.trial) return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Error checking trial period: $e');
+      return false;
     }
-    return false;
   }
 
   /// Check if any active subscription is in grace period
   Future<bool> isInGracePeriod() async {
-    final info = await refreshCustomerInfo();
-    if (info == null) return false;
+    try {
+      final info = await refreshCustomerInfo();
+      if (info == null) return false;
 
-    for (var entitlement in info.entitlements.active.values) {
-      final isUnsubscribed = entitlement.unsubscribeDetectedAt != null;
-      final expirationStr = entitlement.expirationDate;
-      if (isUnsubscribed && expirationStr != null) {
-        final expiration = DateTime.parse(expirationStr);
-        if (expiration.isAfter(DateTime.now())) return true;
+      for (var entitlement in info.entitlements.active.values) {
+        final isUnsubscribed = entitlement.unsubscribeDetectedAt != null;
+        final expirationStr = entitlement.expirationDate;
+
+        if (isUnsubscribed && expirationStr != null) {
+          final expiration = DateTime.parse(expirationStr);
+          if (expiration.isAfter(DateTime.now())) return true;
+        }
       }
+      return false;
+    } catch (e) {
+      debugPrint('Error checking grace period: $e');
+      return false;
     }
-    return false;
   }
 
   /// Get subscription expiration date
   Future<DateTime?> getSubscriptionExpirationDate() async {
-    final info = await refreshCustomerInfo();
-    if (info == null) return null;
+    try {
+      final info = await refreshCustomerInfo();
+      if (info == null) return null;
 
-    final entitlements = info.entitlements.active.values;
-    if (entitlements.isEmpty) return null;
+      final entitlements = info.entitlements.active.values;
+      if (entitlements.isEmpty) return null;
 
-    final expirationStr = entitlements.first.expirationDate;
-    if (expirationStr == null) return null;
+      final expirationStr = entitlements.first.expirationDate;
+      if (expirationStr == null) return null;
 
-    return DateTime.parse(expirationStr);
+      return DateTime.parse(expirationStr);
+    } catch (e) {
+      debugPrint('Error getting expiration date: $e');
+      return null;
+    }
   }
 
   /// Get available offerings
@@ -99,37 +126,41 @@ class SubscriptionService {
     try {
       return await Purchases.getOfferings();
     } catch (e) {
-      print('Error fetching offerings: $e');
+      debugPrint('Error fetching offerings: $e');
       return null;
     }
   }
 
-  /// Purchase a package using the new API
+  /// Purchase a package
   Future<CustomerInfo?> purchasePackage(Package package) async {
     try {
-      // Use the named constructor for Package
-      final purchaseResult = await Purchases.purchase(
-        PurchaseParams.package(package),
-      );
-
+      // FIXED: purchasePackage returns PurchaseResult, extract CustomerInfo from it
+      final purchaseResult = await Purchases.purchasePackage(package);
       _customerInfo = purchaseResult.customerInfo;
       return _customerInfo;
-    } on PurchasesErrorCode catch (_) {
-      rethrow;
+    } on PurchasesErrorCode catch (errorCode) {
+      // Handle specific purchase errors using PurchasesErrorCode
+      debugPrint('Purchase error: ${errorCode.name}');
+      
+      if (errorCode == PurchasesErrorCode.purchaseCancelledError) {
+        // User cancelled - rethrow so UI can handle it
+        rethrow;
+      }
+      return null;
     } catch (e) {
-      print('Error purchasing package: $e');
+      debugPrint('Error purchasing package: $e');
       return null;
     }
   }
 
-  /// Restore previous purchases (still returns CustomerInfo directly)
+  /// Restore previous purchases
   Future<CustomerInfo?> restorePurchases() async {
     try {
       final info = await Purchases.restorePurchases();
       _customerInfo = info;
       return _customerInfo;
     } catch (e) {
-      print('Error restoring purchases: $e');
+      debugPrint('Error restoring purchases: $e');
       return null;
     }
   }
