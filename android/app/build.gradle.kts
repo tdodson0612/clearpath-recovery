@@ -1,6 +1,12 @@
 import java.util.Properties
 import java.io.FileInputStream
 
+plugins {
+    id("com.android.application")
+    id("kotlin-android")
+    id("dev.flutter.flutter-gradle-plugin") // <-- REQUIRED for flutter.versionCode / flutter.versionName
+}
+
 // Load keystore properties
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
@@ -8,20 +14,20 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
-plugins {
-    id("com.android.application")
-    id("kotlin-android")
-    id("dev.flutter.flutter-gradle-plugin")
-}
-
 android {
     namespace = "com.TheScanMan.clearpathrecovery"
-    compileSdk = 36
-    ndkVersion = flutter.ndkVersion
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = "27.0.12077973"
+
+    // Fix for AGP 8+ (required)
+    buildFeatures {
+        buildConfig = true
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -31,44 +37,44 @@ android {
     defaultConfig {
         applicationId = "com.TheScanMan.clearpathrecovery"
         minSdk = flutter.minSdkVersion
-        targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.1"
+        targetSdk = flutter.targetSdkVersion
+
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+
+        multiDexEnabled = true
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
         create("release") {
-            keyAlias = keystoreProperties.getProperty("keyAlias") ?: ""
-            keyPassword = keystoreProperties.getProperty("keyPassword") ?: ""
-            storePassword = keystoreProperties.getProperty("storePassword") ?: ""
-
-            val storeFilePath = keystoreProperties.getProperty("storeFile")
-            if (!storeFilePath.isNullOrEmpty()) {
-                val file = rootProject.file(storeFilePath)
-                if (file.exists()) {
-                    storeFile = file
-                } else {
-                    println("WARNING: Keystore file not found at $storeFilePath")
-                }
-            } else {
-                println("WARNING: storeFile property is missing in key.properties")
-            }
+            keyAlias = keystoreProperties["keyAlias"]?.toString()
+            keyPassword = keystoreProperties["keyPassword"]?.toString()
+            storeFile = keystoreProperties["storeFile"]?.let { file(it.toString()) }
+            storePassword = keystoreProperties["storePassword"]?.toString()
         }
     }
 
-
-
-
-
     buildTypes {
-        getByName("release") {
+        release {
             signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // minifyEnabled = true
+            // shrinkResources = true
+        }
+        debug {
+            // Optional debug configs
         }
     }
 }
 
+// Flutter integration (do not remove)
 flutter {
     source = "../.."
 }
+
+dependencies {
+
+    // Core library desugaring for Java 8+ APIs
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+}
+
