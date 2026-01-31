@@ -1,8 +1,8 @@
 //lib/lessons/lesson_list_page.dart
-
 import 'package:flutter/material.dart';
 import 'lesson_model.dart';
 import 'lesson_service.dart';
+import 'lesson_detail_page.dart';
 
 class LessonListPage extends StatefulWidget {
   const LessonListPage({super.key});
@@ -52,9 +52,15 @@ class _LessonListPageState extends State<LessonListPage> with AutomaticKeepAlive
   }
 
   Future<void> _navigateToLesson(Lesson lesson) async {
-    final result = await Navigator.pushNamed(
+    // FIXED: Use direct MaterialPageRoute instead of named route
+    final result = await Navigator.push(
       context,
-      '/lesson/${lesson.week}/${lesson.day}',
+      MaterialPageRoute(
+        builder: (context) => LessonDetailPage(
+          week: lesson.week,
+          day: lesson.day,
+        ),
+      ),
     );
 
     // Reload if lesson was completed

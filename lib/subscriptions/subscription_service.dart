@@ -1,6 +1,9 @@
 // lib/subscriptions/subscription_service.dart
+// ADD THIS METHOD to bypass paywall for Apple test account
+
 import 'package:flutter/foundation.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Service for managing subscriptions with RevenueCat
 class SubscriptionService {
@@ -19,7 +22,6 @@ class SubscriptionService {
     if (_isConfigured) return;
 
     try {
-      // FIXED: Use proper PurchasesConfiguration API
       final configuration = PurchasesConfiguration(apiKey);
       if (appUserId != null) {
         configuration.appUserID = appUserId;
@@ -35,8 +37,6 @@ class SubscriptionService {
       await refreshCustomerInfo();
     } catch (e) {
       debugPrint('Error initializing RevenueCat: $e');
-      // Don't rethrow - allow app to continue even if RevenueCat fails
-      // This prevents app crashes when RevenueCat has issues
     }
   }
 
@@ -52,14 +52,21 @@ class SubscriptionService {
   }
 
   /// Check if user has active subscription
+  /// MODIFIED: Added bypass for Apple test account
   Future<bool> hasActiveSubscription() async {
     try {
+      // BYPASS FOR APPLE TEST ACCOUNT - CRITICAL FOR APP REVIEW
+      final userEmail = Supabase.instance.client.auth.currentUser?.email;
+      if (userEmail == 'testapple@clearpathrecovery.com') {
+        debugPrint('✅ Test account detected - bypassing paywall');
+        return true;
+      }
+
       final info = await refreshCustomerInfo();
       if (info == null) return false;
       return info.entitlements.active.isNotEmpty;
     } catch (e) {
       debugPrint('Error checking subscription: $e');
-      // In case of error, assume no subscription to be safe
       return false;
     }
   }
@@ -134,16 +141,13 @@ class SubscriptionService {
   /// Purchase a package
   Future<CustomerInfo?> purchasePackage(Package package) async {
     try {
-      // FIXED: purchasePackage returns PurchaseResult, extract CustomerInfo from it
       final purchaseResult = await Purchases.purchasePackage(package);
       _customerInfo = purchaseResult.customerInfo;
       return _customerInfo;
     } on PurchasesErrorCode catch (errorCode) {
-      // Handle specific purchase errors using PurchasesErrorCode
       debugPrint('Purchase error: ${errorCode.name}');
       
       if (errorCode == PurchasesErrorCode.purchaseCancelledError) {
-        // User cancelled - rethrow so UI can handle it
         rethrow;
       }
       return null;
