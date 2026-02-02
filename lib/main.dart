@@ -44,7 +44,7 @@ void main() async {
     // Step 2: Get Supabase credentials (with fallback)
     debugPrint('Step 2: Getting Supabase credentials...');
     final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? 'https://viuhhlcudemiadwkfedi.supabase.co';
-    final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? 'sb_publishable_V1Ry4vNMSiqRkAri2XiyqA_q90BAWEz';
+    final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZpdWhobGN1ZGVtaWFkd2tmZWRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxMTk4MzAsImV4cCI6MjA4NDY5NTgzMH0.2uGA0hdmo04gX6ZUhLwMf-xzwGUX2E05DQ09K1QzZzg';
     
     debugPrint('Supabase URL: $supabaseUrl');
     debugPrint('Supabase Key length: ${supabaseAnonKey.length} characters');
