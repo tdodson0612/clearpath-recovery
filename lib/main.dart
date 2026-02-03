@@ -21,12 +21,11 @@ import 'settings/settings_page.dart';
 import 'testing_dashboard_page.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'dart:io' show Platform;
 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  String? initializationError;
   
   try {
     debugPrint('=== ClearPath Recovery Initialization Started ===');
@@ -70,24 +69,38 @@ void main() async {
       throw Exception('Supabase initialization failed: $e');
     }
 
-    // Step 4: Initialize RevenueCat (OPTIONAL - commented out for testing)
-    debugPrint('Step 4: RevenueCat initialization (skipped for testing)');
-    // Uncomment below after verifying Supabase works:
+    // Step 4: Initialize RevenueCat (PLATFORM-SPECIFIC, NON-BLOCKING)
+    debugPrint('Step 4: RevenueCat initialization (platform-specific, async)');
     
-    final revenueCatKey = dotenv.env['REVENUECAT_API_KEY'] ?? '';
-    if (revenueCatKey.isNotEmpty) {
-      debugPrint('RevenueCat key found, initializing...');
-      try {
-        await SubscriptionService().initialize(apiKey: revenueCatKey);
-        debugPrint('✓ RevenueCat initialized successfully');
-      } catch (e) {
-        debugPrint('✗ RevenueCat initialization failed: $e');
-        // Don't crash the app if RevenueCat fails
-      }
-    } else {
-      debugPrint('RevenueCat API key not found, skipping');
+    // Determine which API key to use based on platform
+    String? revenueCatKey;
+    
+    if (kIsWeb) {
+      // Web platform - skip RevenueCat entirely (not supported on web)
+      debugPrint('Web platform detected - RevenueCat not supported, skipping');
+    } else if (Platform.isAndroid) {
+      // Android - use Google Play key
+      revenueCatKey = dotenv.env['REVENUECAT_GOOGLE_API_KEY'];
+      debugPrint('Android platform detected - using Google Play API key');
+    } else if (Platform.isIOS) {
+      // iOS - use App Store key
+      revenueCatKey = dotenv.env['REVENUECAT_APPLE_API_KEY'] ?? 
+                      dotenv.env['REVENUECAT_API_KEY']; // fallback to old key
+      debugPrint('iOS platform detected - using App Store API key');
     }
     
+    if (revenueCatKey != null && revenueCatKey.isNotEmpty) {
+      debugPrint('RevenueCat key found (${revenueCatKey.length} chars), initializing in background...');
+      // Initialize in background without blocking app startup
+      SubscriptionService().initialize(apiKey: revenueCatKey).then((_) {
+        debugPrint('✓ RevenueCat initialized successfully');
+      }).catchError((e) {
+        debugPrint('✗ RevenueCat initialization failed: $e');
+        debugPrint('App will continue without in-app purchases');
+      });
+    } else {
+      debugPrint('No RevenueCat API key found for this platform, skipping');
+    }
 
     debugPrint('=== Initialization Complete - Starting App ===');
     runApp(const ClearPathApp());
@@ -376,6 +389,7 @@ class _OnboardingCheckWrapperState extends State<OnboardingCheckWrapper> {
   bool _isLoading = true;
   bool _hasAcceptedDisclaimer = false;
   bool _hasActiveSubscription = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -392,6 +406,7 @@ class _OnboardingCheckWrapperState extends State<OnboardingCheckWrapper> {
       }
 
       // Check if user has accepted disclaimer (has profile)
+      debugPrint('Checking user profile for disclaimer...');
       final response = await supabase
           .from('profiles')
           .select('id')
@@ -399,10 +414,29 @@ class _OnboardingCheckWrapperState extends State<OnboardingCheckWrapper> {
           .maybeSingle();
 
       final hasDisclaimer = response != null;
+      debugPrint('Has disclaimer: $hasDisclaimer');
 
-      // Check subscription status
-      final subscriptionService = SubscriptionService();
-      final hasSubscription = await subscriptionService.hasActiveSubscription();
+      // Check subscription status with timeout and error handling
+      debugPrint('Checking subscription status...');
+      bool hasSubscription = false;
+      
+      try {
+        // Add timeout to prevent hanging
+        hasSubscription = await SubscriptionService()
+            .hasActiveSubscription()
+            .timeout(
+              const Duration(seconds: 5),
+              onTimeout: () {
+                debugPrint('⚠️ Subscription check timed out, assuming no subscription');
+                return false;
+              },
+            );
+        debugPrint('Has active subscription: $hasSubscription');
+      } catch (e) {
+        debugPrint('⚠️ Error checking subscription: $e');
+        // Continue with hasSubscription = false
+        hasSubscription = false;
+      }
 
       setState(() {
         _hasAcceptedDisclaimer = hasDisclaimer;
@@ -410,8 +444,11 @@ class _OnboardingCheckWrapperState extends State<OnboardingCheckWrapper> {
         _isLoading = false;
       });
     } catch (e) {
-      debugPrint('Error checking onboarding status: $e');
-      setState(() => _isLoading = false);
+      debugPrint('❌ Error checking onboarding status: $e');
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
     }
   }
 
@@ -419,7 +456,73 @@ class _OnboardingCheckWrapperState extends State<OnboardingCheckWrapper> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        backgroundColor: Colors.white,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text(
+                'Loading your profile...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Color(0xFF6B7280),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Show error if something went wrong
+    if (_errorMessage != null) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  color: Colors.red,
+                  size: 64,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Error Loading Profile',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _isLoading = true;
+                      _errorMessage = null;
+                    });
+                    _checkOnboardingStatus();
+                  },
+                  child: const Text('Try Again'),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
