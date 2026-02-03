@@ -16,7 +16,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.TheScanMan.clearpathrecovery"
-    compileSdk = 35  // Updated to latest
+    compileSdk = 36  // UPDATED to SDK 36
     ndkVersion = "27.0.12077973"
     
     // Fix for AGP 8+ (required)
@@ -36,8 +36,8 @@ android {
     
     defaultConfig {
         applicationId = "com.TheScanMan.clearpathrecovery"
-        minSdk = 24  // Explicit minimum
-        targetSdk = 35  // Updated to latest
+        minSdk = 24
+        targetSdk = 36  // UPDATED to SDK 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         
@@ -64,7 +64,6 @@ android {
             isShrinkResources = false
         }
         debug {
-            // Debug config
             applicationIdSuffix = ".debug"
         }
     }
