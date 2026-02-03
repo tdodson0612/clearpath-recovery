@@ -4,7 +4,7 @@ import java.io.FileInputStream
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    id("dev.flutter.flutter-gradle-plugin") // <-- REQUIRED for flutter.versionCode / flutter.versionName
+    id("dev.flutter.flutter-gradle-plugin")
 }
 
 // Load keystore properties
@@ -16,36 +16,37 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.TheScanMan.clearpathrecovery"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 35  // Updated to latest
     ndkVersion = "27.0.12077973"
-
+    
     // Fix for AGP 8+ (required)
     buildFeatures {
         buildConfig = true
     }
-
+    
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
         isCoreLibraryDesugaringEnabled = true
     }
-
+    
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_11.toString()
     }
-
+    
     defaultConfig {
         applicationId = "com.TheScanMan.clearpathrecovery"
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-
+        minSdk = 24  // Explicit minimum
+        targetSdk = 35  // Updated to latest
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-
+        
+        // CRITICAL: Enable MultiDex for large app
         multiDexEnabled = true
+        
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-
+    
     signingConfigs {
         create("release") {
             keyAlias = keystoreProperties["keyAlias"]?.toString()
@@ -54,15 +55,33 @@ android {
             storePassword = keystoreProperties["storePassword"]?.toString()
         }
     }
-
+    
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
-            // minifyEnabled = true
-            // shrinkResources = true
+            // Disable minify for now to avoid ProGuard issues
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
         debug {
-            // Optional debug configs
+            // Debug config
+            applicationIdSuffix = ".debug"
+        }
+    }
+    
+    // Prevent duplicate files error
+    packagingOptions {
+        resources {
+            excludes += listOf(
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/LICENSE.txt",
+                "META-INF/license.txt",
+                "META-INF/NOTICE",
+                "META-INF/NOTICE.txt",
+                "META-INF/notice.txt",
+                "META-INF/*.kotlin_module"
+            )
         }
     }
 }
@@ -73,8 +92,9 @@ flutter {
 }
 
 dependencies {
-
     // Core library desugaring for Java 8+ APIs
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    
+    // CRITICAL: MultiDex support
+    implementation("androidx.multidex:multidex:2.0.1")
 }
-

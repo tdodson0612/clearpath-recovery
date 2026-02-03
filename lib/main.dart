@@ -23,83 +23,77 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'dart:io' show Platform;
 
-
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
+  // Wrap EVERYTHING in a try-catch to prevent crashes
   try {
+    WidgetsFlutterBinding.ensureInitialized();
+    
     debugPrint('=== ClearPath Recovery Initialization Started ===');
     
-    // Step 1: Load environment variables
+    // Step 1: Load environment variables with better error handling
     debugPrint('Step 1: Loading .env file...');
+    String? supabaseUrl;
+    String? supabaseAnonKey;
+    String? revenueCatKey;
+    
     try {
       await dotenv.load(fileName: ".env");
+      supabaseUrl = dotenv.env['SUPABASE_URL'];
+      supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
+      
+      if (Platform.isAndroid) {
+        revenueCatKey = dotenv.env['REVENUECAT_GOOGLE_API_KEY'];
+      } else if (Platform.isIOS) {
+        revenueCatKey = dotenv.env['REVENUECAT_APPLE_API_KEY'] ?? 
+                        dotenv.env['REVENUECAT_API_KEY'];
+      }
+      
       debugPrint('✓ .env file loaded successfully');
     } catch (e) {
-      debugPrint('✗ Failed to load .env file: $e');
-      debugPrint('Will attempt to use hardcoded fallback values');
+      debugPrint('⚠️ Failed to load .env file: $e');
+      debugPrint('Using hardcoded fallback values');
     }
     
-    // Step 2: Get Supabase credentials (with fallback)
-    debugPrint('Step 2: Getting Supabase credentials...');
-    final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? 'https://viuhhlcudemiadwkfedi.supabase.co';
-    final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZpdWhobGN1ZGVtaWFkd2tmZWRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxMTk4MzAsImV4cCI6MjA4NDY5NTgzMH0.2uGA0hdmo04gX6ZUhLwMf-xzwGUX2E05DQ09K1QzZzg';
+    // Step 2: Use hardcoded fallbacks if .env failed
+    supabaseUrl ??= 'https://viuhhlcudemiadwkfedi.supabase.co';
+    supabaseAnonKey ??= 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZpdWhobGN1ZGVtaWFkd2tmZWRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxMTk4MzAsImV4cCI6MjA4NDY5NTgzMH0.2uGA0hdmo04gX6ZUhLwMf-xzwGUX2E05DQ09K1QzZzg';
+    revenueCatKey ??= 'test_cSmQKOJPHQlcKzwICEFNWGotFNA';
     
     debugPrint('Supabase URL: $supabaseUrl');
     debugPrint('Supabase Key length: ${supabaseAnonKey.length} characters');
     
-    if (supabaseUrl.isEmpty) {
-      throw Exception('SUPABASE_URL is empty');
+    // Step 3: Validate credentials
+    if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
+      throw Exception('Supabase credentials are empty');
     }
     
-    if (supabaseAnonKey.isEmpty) {
-      throw Exception('SUPABASE_ANON_KEY is empty');
-    }
-    
-    // Step 3: Initialize Supabase
+    // Step 4: Initialize Supabase with timeout
     debugPrint('Step 3: Initializing Supabase...');
-    try {
-      await Supabase.initialize(
-        url: supabaseUrl,
-        anonKey: supabaseAnonKey,
-      );
-      debugPrint('✓ Supabase initialized successfully');
-    } catch (e) {
-      debugPrint('✗ Supabase initialization failed: $e');
-      throw Exception('Supabase initialization failed: $e');
-    }
+    await Supabase.initialize(
+      url: supabaseUrl,
+      anonKey: supabaseAnonKey,
+    ).timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {
+        throw Exception('Supabase initialization timed out');
+      },
+    );
+    debugPrint('✓ Supabase initialized successfully');
 
-    // Step 4: Initialize RevenueCat (PLATFORM-SPECIFIC, NON-BLOCKING)
-    debugPrint('Step 4: RevenueCat initialization (platform-specific, async)');
+    // Step 5: Initialize RevenueCat in background (NON-BLOCKING)
+    debugPrint('Step 4: RevenueCat initialization (background)');
     
-    // Determine which API key to use based on platform
-    String? revenueCatKey;
-    
-    if (kIsWeb) {
-      // Web platform - skip RevenueCat entirely (not supported on web)
-      debugPrint('Web platform detected - RevenueCat not supported, skipping');
-    } else if (Platform.isAndroid) {
-      // Android - use Google Play key
-      revenueCatKey = dotenv.env['REVENUECAT_GOOGLE_API_KEY'];
-      debugPrint('Android platform detected - using Google Play API key');
-    } else if (Platform.isIOS) {
-      // iOS - use App Store key
-      revenueCatKey = dotenv.env['REVENUECAT_APPLE_API_KEY'] ?? 
-                      dotenv.env['REVENUECAT_API_KEY']; // fallback to old key
-      debugPrint('iOS platform detected - using App Store API key');
-    }
-    
-    if (revenueCatKey != null && revenueCatKey.isNotEmpty) {
-      debugPrint('RevenueCat key found (${revenueCatKey.length} chars), initializing in background...');
+    if (!kIsWeb && revenueCatKey.isNotEmpty) {
+      debugPrint('RevenueCat key found, initializing in background...');
       // Initialize in background without blocking app startup
       SubscriptionService().initialize(apiKey: revenueCatKey).then((_) {
         debugPrint('✓ RevenueCat initialized successfully');
       }).catchError((e) {
-        debugPrint('✗ RevenueCat initialization failed: $e');
+        debugPrint('⚠️ RevenueCat initialization failed: $e');
         debugPrint('App will continue without in-app purchases');
       });
     } else {
-      debugPrint('No RevenueCat API key found for this platform, skipping');
+      debugPrint('No RevenueCat key or web platform, skipping');
     }
 
     debugPrint('=== Initialization Complete - Starting App ===');
@@ -112,7 +106,7 @@ void main() async {
     debugPrint('Stack trace: $stackTrace');
     debugPrint('===================================');
     
-    // Show error screen to user
+    // Show error screen to user instead of crashing
     runApp(MaterialApp(
       home: ErrorScreen(
         error: e.toString(),
@@ -174,7 +168,7 @@ class ErrorScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.red.shade200),
                 ),
-                child: Text(
+                child: SelectableText(
                   error,
                   style: const TextStyle(
                     fontSize: 12,
@@ -194,8 +188,8 @@ class ErrorScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               _buildSolution('1. Check your internet connection'),
-              _buildSolution('2. Verify Supabase credentials are correct'),
-              _buildSolution('3. Clear app cache and try again'),
+              _buildSolution('2. Restart the app'),
+              _buildSolution('3. Clear app cache and data'),
               _buildSolution('4. Reinstall the app'),
               const SizedBox(height: 20),
               if (kDebugMode) ...[
@@ -230,7 +224,6 @@ class ErrorScreen extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    // Try to restart the app
                     SystemNavigator.pop();
                   },
                   style: ElevatedButton.styleFrom(
@@ -239,7 +232,10 @@ class ErrorScreen extends StatelessWidget {
                   ),
                   child: const Text(
                     'Close App',
-                    style: TextStyle(fontSize: 16),
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -411,7 +407,11 @@ class _OnboardingCheckWrapperState extends State<OnboardingCheckWrapper> {
           .from('profiles')
           .select('id')
           .eq('id', userId)
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => null,
+          );
 
       final hasDisclaimer = response != null;
       debugPrint('Has disclaimer: $hasDisclaimer');
@@ -421,7 +421,6 @@ class _OnboardingCheckWrapperState extends State<OnboardingCheckWrapper> {
       bool hasSubscription = false;
       
       try {
-        // Add timeout to prevent hanging
         hasSubscription = await SubscriptionService()
             .hasActiveSubscription()
             .timeout(
@@ -434,21 +433,24 @@ class _OnboardingCheckWrapperState extends State<OnboardingCheckWrapper> {
         debugPrint('Has active subscription: $hasSubscription');
       } catch (e) {
         debugPrint('⚠️ Error checking subscription: $e');
-        // Continue with hasSubscription = false
         hasSubscription = false;
       }
 
-      setState(() {
-        _hasAcceptedDisclaimer = hasDisclaimer;
-        _hasActiveSubscription = hasSubscription;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _hasAcceptedDisclaimer = hasDisclaimer;
+          _hasActiveSubscription = hasSubscription;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('❌ Error checking onboarding status: $e');
-      setState(() {
-        _errorMessage = e.toString();
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
     }
   }
 

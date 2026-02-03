@@ -1,3 +1,5 @@
+// lib/auth/signup_page.dart
+
 import 'package:flutter/material.dart';
 import '../auth/auth_service.dart';
 
