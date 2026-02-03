@@ -73,7 +73,7 @@ void main() async {
     // Step 4: Initialize RevenueCat (OPTIONAL - commented out for testing)
     debugPrint('Step 4: RevenueCat initialization (skipped for testing)');
     // Uncomment below after verifying Supabase works:
-    /*
+    
     final revenueCatKey = dotenv.env['REVENUECAT_API_KEY'] ?? '';
     if (revenueCatKey.isNotEmpty) {
       debugPrint('RevenueCat key found, initializing...');
@@ -87,7 +87,7 @@ void main() async {
     } else {
       debugPrint('RevenueCat API key not found, skipping');
     }
-    */
+    
 
     debugPrint('=== Initialization Complete - Starting App ===');
     runApp(const ClearPathApp());
