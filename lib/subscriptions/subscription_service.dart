@@ -1,5 +1,4 @@
 // lib/subscriptions/subscription_service.dart
-// ADD THIS METHOD to bypass paywall for Apple test account
 
 import 'package:flutter/foundation.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
@@ -22,6 +21,14 @@ class SubscriptionService {
     if (_isConfigured) return;
 
     try {
+      // Check if using test key - if so, skip initialization to avoid crash
+      if (apiKey.startsWith('test_')) {
+        debugPrint('⚠️ Test API key detected - skipping RevenueCat initialization');
+        debugPrint('💡 App will run in development mode with bypassed subscription checks');
+        _isConfigured = false; // Mark as NOT configured so checks are bypassed
+        return;
+      }
+
       final configuration = PurchasesConfiguration(apiKey);
       if (appUserId != null) {
         configuration.appUserID = appUserId;
@@ -35,13 +42,17 @@ class SubscriptionService {
       }
 
       await refreshCustomerInfo();
+      debugPrint('✓ RevenueCat configured successfully with production key');
     } catch (e) {
       debugPrint('Error initializing RevenueCat: $e');
+      _isConfigured = false;
     }
   }
 
   /// Refresh customer info
   Future<CustomerInfo?> refreshCustomerInfo() async {
+    if (!_isConfigured) return null;
+    
     try {
       _customerInfo = await Purchases.getCustomerInfo();
       return _customerInfo;
@@ -52,27 +63,41 @@ class SubscriptionService {
   }
 
   /// Check if user has active subscription
-  /// MODIFIED: Added bypass for Apple test account
+  /// DEVELOPMENT MODE: Returns true when RevenueCat is not configured (test keys)
   Future<bool> hasActiveSubscription() async {
     try {
-      // BYPASS FOR APPLE TEST ACCOUNT - CRITICAL FOR APP REVIEW
+      // BYPASS #1: For Apple test account (App Review)
       final userEmail = Supabase.instance.client.auth.currentUser?.email;
       if (userEmail == 'testapple@clearpathrecovery.com') {
         debugPrint('✅ Test account detected - bypassing paywall');
         return true;
       }
 
+      // BYPASS #2: If RevenueCat is not configured (test key), allow access for development
+      if (!_isConfigured) {
+        debugPrint('✅ Development mode - bypassing subscription check (RevenueCat not configured)');
+        return true;
+      }
+
+      // PRODUCTION: Check actual subscription status
       final info = await refreshCustomerInfo();
       if (info == null) return false;
       return info.entitlements.active.isNotEmpty;
     } catch (e) {
       debugPrint('Error checking subscription: $e');
+      // In development, allow access on error
+      if (!_isConfigured) {
+        debugPrint('✅ Error in development mode - allowing access');
+        return true;
+      }
       return false;
     }
   }
 
   /// Check if user is in trial period
   Future<bool> isInTrialPeriod() async {
+    if (!_isConfigured) return false;
+    
     try {
       final info = await refreshCustomerInfo();
       if (info == null) return false;
@@ -89,6 +114,8 @@ class SubscriptionService {
 
   /// Check if any active subscription is in grace period
   Future<bool> isInGracePeriod() async {
+    if (!_isConfigured) return false;
+    
     try {
       final info = await refreshCustomerInfo();
       if (info == null) return false;
@@ -111,6 +138,8 @@ class SubscriptionService {
 
   /// Get subscription expiration date
   Future<DateTime?> getSubscriptionExpirationDate() async {
+    if (!_isConfigured) return null;
+    
     try {
       final info = await refreshCustomerInfo();
       if (info == null) return null;
@@ -130,6 +159,11 @@ class SubscriptionService {
 
   /// Get available offerings
   Future<Offerings?> getOfferings() async {
+    if (!_isConfigured) {
+      debugPrint('⚠️ RevenueCat not configured - cannot fetch offerings');
+      return null;
+    }
+    
     try {
       return await Purchases.getOfferings();
     } catch (e) {
@@ -140,6 +174,11 @@ class SubscriptionService {
 
   /// Purchase a package
   Future<CustomerInfo?> purchasePackage(Package package) async {
+    if (!_isConfigured) {
+      debugPrint('⚠️ RevenueCat not configured - cannot purchase');
+      return null;
+    }
+    
     try {
       final purchaseResult = await Purchases.purchasePackage(package);
       _customerInfo = purchaseResult.customerInfo;
@@ -159,6 +198,11 @@ class SubscriptionService {
 
   /// Restore previous purchases
   Future<CustomerInfo?> restorePurchases() async {
+    if (!_isConfigured) {
+      debugPrint('⚠️ RevenueCat not configured - cannot restore purchases');
+      return null;
+    }
+    
     try {
       final info = await Purchases.restorePurchases();
       _customerInfo = info;
@@ -168,4 +212,7 @@ class SubscriptionService {
       return null;
     }
   }
+
+  /// Check if RevenueCat is properly configured (useful for debugging)
+  bool get isConfigured => _isConfigured;
 }
