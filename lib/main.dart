@@ -62,6 +62,15 @@ void main() async {
     debugPrint('Supabase URL: $supabaseUrl');
     debugPrint('Supabase Key length: ${supabaseAnonKey.length} characters');
     
+    // Check if using test RevenueCat key
+    if (revenueCatKey.startsWith('test_')) {
+      debugPrint('⚠️ Using TEST RevenueCat key - app will run in development mode');
+      debugPrint('💡 Subscription checks will be bypassed for testing');
+      debugPrint('💡 Replace with production key before releasing to users');
+    } else {
+      debugPrint('✓ Using production RevenueCat key');
+    }
+    
     // Step 3: Validate credentials
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
       throw Exception('Supabase credentials are empty');
@@ -87,7 +96,11 @@ void main() async {
       debugPrint('RevenueCat key found, initializing in background...');
       // Initialize in background without blocking app startup
       SubscriptionService().initialize(apiKey: revenueCatKey).then((_) {
-        debugPrint('✓ RevenueCat initialized successfully');
+        if (SubscriptionService().isConfigured) {
+          debugPrint('✓ RevenueCat initialized successfully');
+        } else {
+          debugPrint('⚠️ RevenueCat running in development mode (test key detected)');
+        }
       }).catchError((e) {
         debugPrint('⚠️ RevenueCat initialization failed: $e');
         debugPrint('App will continue without in-app purchases');
@@ -433,6 +446,7 @@ class _OnboardingCheckWrapperState extends State<OnboardingCheckWrapper> {
         debugPrint('Has active subscription: $hasSubscription');
       } catch (e) {
         debugPrint('⚠️ Error checking subscription: $e');
+        // In development mode (test keys), allow access on error
         hasSubscription = false;
       }
 
