@@ -1,7 +1,7 @@
 name: clearpath_recovery
 description: "ClearPath Recovery - Evidence-based recovery support app"
 publish_to: 'none'
-version: 1.0.1+7
+version: 1.0.1+8
 
 environment:
   sdk: ^3.9.2
@@ -46,7 +46,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  
   # CRITICAL: Assets must be properly configured for Android
   assets:
     - .env
