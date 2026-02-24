@@ -16,7 +16,7 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
-  
+
   bool _isPasswordVisible = false;
   bool _isLoading = false;
 
@@ -39,7 +39,10 @@ class _LoginPageState extends State<LoginPage> {
       );
 
       if (mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
+        // Push to '/' so AuthWrapper → OnboardingCheckWrapper runs in full.
+        // This correctly evaluates disclaimer acceptance and subscription
+        // status on every login, regardless of prior session state.
+        Navigator.pushReplacementNamed(context, '/');
       }
     } catch (e) {
       if (mounted) {
@@ -51,9 +54,7 @@ class _LoginPageState extends State<LoginPage> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -103,10 +104,11 @@ class _LoginPageState extends State<LoginPage> {
 
                 const SizedBox(height: 32),
 
-                // Title with gradient
+                // Title
                 Center(
                   child: ShaderMask(
-                    shaderCallback: (bounds) => AppColors.primaryGradient.createShader(
+                    shaderCallback: (bounds) =>
+                        AppColors.primaryGradient.createShader(
                       Rect.fromLTWH(0, 0, bounds.width, bounds.height),
                     ),
                     child: const Text(
@@ -144,7 +146,10 @@ class _LoginPageState extends State<LoginPage> {
                   decoration: InputDecoration(
                     labelText: 'Email',
                     hintText: 'your.email@example.com',
-                    prefixIcon: Icon(Icons.email_outlined, color: AppColors.primaryBlue),
+                    prefixIcon: Icon(
+                      Icons.email_outlined,
+                      color: AppColors.primaryBlue,
+                    ),
                     filled: true,
                     fillColor: AppColors.cardWhite,
                     border: OutlineInputBorder(
@@ -190,7 +195,10 @@ class _LoginPageState extends State<LoginPage> {
                   decoration: InputDecoration(
                     labelText: 'Password',
                     hintText: 'Enter your password',
-                    prefixIcon: Icon(Icons.lock_outline, color: AppColors.primaryGreen),
+                    prefixIcon: Icon(
+                      Icons.lock_outline,
+                      color: AppColors.primaryGreen,
+                    ),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _isPasswordVisible
@@ -198,11 +206,8 @@ class _LoginPageState extends State<LoginPage> {
                             : Icons.visibility_off_outlined,
                         color: AppColors.textMedium,
                       ),
-                      onPressed: () {
-                        setState(() {
-                          _isPasswordVisible = !_isPasswordVisible;
-                        });
-                      },
+                      onPressed: () => setState(
+                          () => _isPasswordVisible = !_isPasswordVisible),
                     ),
                     filled: true,
                     fillColor: AppColors.cardWhite,
@@ -248,7 +253,8 @@ class _LoginPageState extends State<LoginPage> {
                       if (email.isEmpty || !email.contains('@')) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: const Text('Please enter your email first'),
+                            content:
+                                const Text('Please enter your email first'),
                             backgroundColor: AppColors.warning,
                           ),
                         );
@@ -260,7 +266,8 @@ class _LoginPageState extends State<LoginPage> {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: const Text('Password reset email sent! Check your inbox.'),
+                              content: const Text(
+                                  'Password reset email sent! Check your inbox.'),
                               backgroundColor: AppColors.success,
                             ),
                           );
@@ -281,22 +288,21 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     child: const Text(
                       'Forgot Password?',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
 
                 const SizedBox(height: 24),
 
-                // Login button with gradient
+                // Login button
                 SizedBox(
                   width: double.infinity,
                   height: 56,
                   child: _isLoading
                       ? Container(
-                          decoration: AppColors.getGradientDecoration(withShadow: false),
+                          decoration: AppColors.getGradientDecoration(
+                              withShadow: false),
                           child: const Center(
                             child: SizedBox(
                               height: 24,
@@ -304,8 +310,7 @@ class _LoginPageState extends State<LoginPage> {
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
                                 valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
+                                    Colors.white),
                               ),
                             ),
                           ),
@@ -340,14 +345,11 @@ class _LoginPageState extends State<LoginPage> {
                   children: [
                     Text(
                       "Don't have an account? ",
-                      style: TextStyle(
-                        color: AppColors.textMedium,
-                      ),
+                      style: TextStyle(color: AppColors.textMedium),
                     ),
                     TextButton(
-                      onPressed: () {
-                        Navigator.pushReplacementNamed(context, '/signup');
-                      },
+                      onPressed: () =>
+                          Navigator.pushReplacementNamed(context, '/signup'),
                       style: TextButton.styleFrom(
                         foregroundColor: AppColors.primaryGreen,
                         padding: EdgeInsets.zero,
@@ -356,9 +358,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       child: const Text(
                         'Sign Up',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
@@ -366,7 +366,7 @@ class _LoginPageState extends State<LoginPage> {
 
                 const SizedBox(height: 32),
 
-                // Crisis resources notice
+                // Crisis notice
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -397,9 +397,7 @@ class _LoginPageState extends State<LoginPage> {
                                 text: 'In Crisis? ',
                                 style: TextStyle(fontWeight: FontWeight.w600),
                               ),
-                              TextSpan(
-                                text: 'Call 988 or 911',
-                              ),
+                              TextSpan(text: 'Call 988 or 911'),
                             ],
                           ),
                         ),
