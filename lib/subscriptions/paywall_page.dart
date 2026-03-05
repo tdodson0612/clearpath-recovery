@@ -1,8 +1,26 @@
 // lib/subscriptions/paywall_page.dart
+//
+// Apple Guideline compliance:
+//   3.1.2(c) — Clickable Privacy Policy and Terms of Use links are shown
+//              in the bottom section, and subscription title/duration/price
+//              are all visible before purchase.
+//   2.3.2    — Subscription requirement is stated clearly in the subtitle
+//              and in the auto-renew disclosure beneath the CTA button.
+//   2.1(b)   — Resolved in App Store Connect by submitting IAP products
+//              alongside the binary (no code change required).
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'subscription_service.dart';
+
+// ── Replace these with your real URLs ────────────────────────────────────────
+const String _kPrivacyPolicyUrl =
+    'https://www.clearpathrecovery.com/privacy-policy';
+const String _kTermsOfServiceUrl =
+    'https://www.clearpathrecovery.com/terms-of-service';
+// ─────────────────────────────────────────────────────────────────────────────
 
 class PaywallPage extends StatefulWidget {
   const PaywallPage({super.key});
@@ -20,15 +38,15 @@ class _PaywallPageState extends State<PaywallPage> {
   bool _isPurchasing = false;
   bool _isRestoring = false;
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Data loading
+  // ─────────────────────────────────────────────────────────────────────────
+
   @override
   void initState() {
     super.initState();
     _loadOfferings();
   }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Data loading
-  // ─────────────────────────────────────────────────────────────────────────
 
   Future<void> _loadOfferings() async {
     setState(() => _isLoading = true);
@@ -49,9 +67,7 @@ class _PaywallPageState extends State<PaywallPage> {
           _isLoading = false;
         });
       } else {
-        // Dev mode or no offerings configured — show static UI silently.
-        // No error shown to the user; the paywall still renders normally
-        // with the static price placeholder.
+        // Dev mode or no offerings — render static UI silently.
         setState(() {
           _offerings = null;
           _selectedPackage = null;
@@ -60,7 +76,6 @@ class _PaywallPageState extends State<PaywallPage> {
       }
     } catch (e) {
       debugPrint('⚠️  Error loading offerings: $e');
-      // Don't show a red banner here either — just render the static UI.
       setState(() => _isLoading = false);
     }
   }
@@ -76,7 +91,6 @@ class _PaywallPageState extends State<PaywallPage> {
       if (_selectedPackage != null) {
         await _subscriptionService.purchasePackage(_selectedPackage!);
       } else {
-        // Dev mode — no real package; log and fall through to navigation.
         debugPrint('⚠️  No package selected — dev mode, navigating to /home');
       }
 
@@ -100,8 +114,6 @@ class _PaywallPageState extends State<PaywallPage> {
     try {
       final info = await _subscriptionService.restorePurchases();
 
-      // info is null in dev mode AND when no prior purchases exist — both
-      // correctly surface the neutral grey "No active subscriptions found".
       if (info != null && info.entitlements.active.isNotEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -116,11 +128,16 @@ class _PaywallPageState extends State<PaywallPage> {
         _showInfo('No active subscriptions found.');
       }
     } catch (e) {
-      // SubscriptionService never throws in dev mode, so this is only
-      // reached on unexpected production errors.
       _showError('Could not restore purchases. Please try again.');
     } finally {
       if (mounted) setState(() => _isRestoring = false);
+    }
+  }
+
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      _showError('Could not open link. Please visit $url');
     }
   }
 
@@ -135,8 +152,6 @@ class _PaywallPageState extends State<PaywallPage> {
     );
   }
 
-  /// Neutral grey snackbar — used for non-alarming informational messages
-  /// like "No active subscriptions found" on restore.
   void _showInfo(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -204,18 +219,22 @@ class _PaywallPageState extends State<PaywallPage> {
                             ),
                           ),
 
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
 
-                          // Subtitle
+                          // ── Guideline 2.3.2 ──────────────────────────────
+                          // Clearly state that a paid subscription is required
+                          // before users can access the app content.
                           const Text(
-                            'Access evidence-based recovery tools and daily support',
+                            'A subscription is required to access ClearPath Recovery. '
+                            'All features listed below are included in the subscription.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 14,
                               color: Color(0xFF6B7280),
                               height: 1.5,
                             ),
                           ),
+                          // ─────────────────────────────────────────────────
 
                           const SizedBox(height: 40),
 
@@ -247,15 +266,22 @@ class _PaywallPageState extends State<PaywallPage> {
 
                           const SizedBox(height: 40),
 
-                          // Subscription card — live price when available,
-                          // static $9.99 placeholder in dev mode.
+                          // Subscription card
                           _buildSubscriptionCard(),
+
+                          const SizedBox(height: 24),
+
+                          // ── Guideline 3.1.2(c) — Auto-renew disclosure ──
+                          // Must appear BEFORE the purchase button (i.e. in
+                          // the scrollable body, not just the footer).
+                          _buildAutoRenewDisclosure(),
+                          // ─────────────────────────────────────────────────
                         ],
                       ),
                     ),
                   ),
 
-                  // Sticky bottom CTA
+                  // Sticky bottom CTA + legal links
                   _buildBottomSection(),
                 ],
               ),
@@ -297,15 +323,24 @@ class _PaywallPageState extends State<PaywallPage> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── Guideline 3.1.2(c) ───────────────────────────────────
+                  // Title of the auto-renewing subscription must be visible.
                   const Text(
-                    'Monthly Subscription',
+                    'ClearPath Monthly',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  // Length of subscription must be visible.
+                  const Text(
+                    '1-month subscription',
+                    style: TextStyle(fontSize: 13, color: Colors.white70),
+                  ),
+                  // ─────────────────────────────────────────────────────────
+                  const SizedBox(height: 8),
+                  // Price must be visible.
                   Text(
                     priceString,
                     style: const TextStyle(
@@ -361,7 +396,7 @@ class _PaywallPageState extends State<PaywallPage> {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  '✓ First charge after 7 days',
+                  '✓ First charge after 7-day free trial',
                   style: TextStyle(fontSize: 14, color: Colors.white),
                 ),
               ],
@@ -372,9 +407,39 @@ class _PaywallPageState extends State<PaywallPage> {
     );
   }
 
+  /// Auto-renew disclosure required by Guideline 3.1.2(c).
+  /// Must include: subscription name, billing period, price, and cancellation
+  /// info. Displayed in the scrollable body so it is seen before purchase.
+  Widget _buildAutoRenewDisclosure() {
+    final priceString =
+        _selectedPackage?.storeProduct.priceString ?? '\$9.99';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Text(
+        'ClearPath Monthly auto-renews at $priceString/month after the '
+        '7-day free trial. Your subscription will automatically renew '
+        'unless cancelled at least 24 hours before the end of the current '
+        'period. You can manage or cancel your subscription in your '
+        'App Store account settings at any time.',
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 12,
+          color: Color(0xFF6B7280),
+          height: 1.6,
+        ),
+      ),
+    );
+  }
+
   Widget _buildBottomSection() {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -386,6 +451,7 @@ class _PaywallPageState extends State<PaywallPage> {
         ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           // Start Trial button
           SizedBox(
@@ -422,7 +488,7 @@ class _PaywallPageState extends State<PaywallPage> {
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
           // Restore purchases
           TextButton(
@@ -444,12 +510,40 @@ class _PaywallPageState extends State<PaywallPage> {
 
           const SizedBox(height: 8),
 
-          // Terms
-          Text(
-            'By continuing, you agree to our Terms of Service and Privacy Policy',
+          // ── Guideline 3.1.2(c) — Functional links to Privacy Policy and
+          // Terms of Use (EULA). These must be tappable, not plain text.
+          RichText(
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            text: TextSpan(
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              children: [
+                const TextSpan(text: 'By continuing, you agree to our '),
+                TextSpan(
+                  text: 'Terms of Service',
+                  style: const TextStyle(
+                    color: Color(0xFF4F46E5),
+                    decoration: TextDecoration.underline,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  recognizer: TapGestureRecognizer()
+                    ..onTap = () => _launchUrl(_kTermsOfServiceUrl),
+                ),
+                const TextSpan(text: ' and '),
+                TextSpan(
+                  text: 'Privacy Policy',
+                  style: const TextStyle(
+                    color: Color(0xFF4F46E5),
+                    decoration: TextDecoration.underline,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  recognizer: TapGestureRecognizer()
+                    ..onTap = () => _launchUrl(_kPrivacyPolicyUrl),
+                ),
+                const TextSpan(text: '.'),
+              ],
+            ),
           ),
+          // ─────────────────────────────────────────────────────────────────
         ],
       ),
     );

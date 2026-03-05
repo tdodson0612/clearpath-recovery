@@ -1,7 +1,7 @@
 name: clearpath_recovery
 description: "ClearPath Recovery - Evidence-based recovery support app"
 publish_to: 'none'
-version: 1.0.1+11
+version: 1.0.1+12
 
 environment:
   sdk: ^3.9.2
@@ -38,6 +38,10 @@ dependencies:
   
   # RevenueCat
   purchases_flutter: ^9.10.7
+
+  # url launcher
+  url_launcher: ^6.3.0
+
 
 dev_dependencies:
   flutter_test:
