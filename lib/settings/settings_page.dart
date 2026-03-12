@@ -109,7 +109,7 @@ class _SettingsPageState extends State<SettingsPage> {
       builder: (context) {
         final controller = TextEditingController();
         bool canDelete = false;
-        
+
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
@@ -321,11 +321,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           icon: Icons.credit_card,
                           title: 'Manage Subscription',
                           onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Subscription management coming soon'),
-                              ),
-                            );
+                            Navigator.pushNamed(context, '/paywall');
                           },
                         ),
                         _buildDivider(),
@@ -502,7 +498,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
                   const SizedBox(height: 24),
 
-                  // DANGER ZONE - NEW SECTION
+                  // Danger Zone
                   const Text(
                     'Danger Zone',
                     style: TextStyle(
@@ -585,8 +581,9 @@ class _SettingsPageState extends State<SettingsPage> {
     required VoidCallback onTap,
     bool isDestructive = false,
   }) {
-    final color = isDestructive ? const Color(0xFFDC2626) : const Color(0xFF6B7280);
-    
+    final color =
+        isDestructive ? const Color(0xFFDC2626) : const Color(0xFF6B7280);
+
     return InkWell(
       onTap: onTap,
       child: Padding(
@@ -603,8 +600,11 @@ class _SettingsPageState extends State<SettingsPage> {
                     title,
                     style: TextStyle(
                       fontSize: 15,
-                      color: isDestructive ? color : const Color(0xFF1F2937),
-                      fontWeight: isDestructive ? FontWeight.w600 : FontWeight.normal,
+                      color:
+                          isDestructive ? color : const Color(0xFF1F2937),
+                      fontWeight: isDestructive
+                          ? FontWeight.w600
+                          : FontWeight.normal,
                     ),
                   ),
                   if (subtitle != null) ...[
