@@ -57,7 +57,7 @@ void main() async {
     // Step 2: Use hardcoded fallbacks if .env failed
     supabaseUrl ??= 'https://viuhhlcudemiadwkfedi.supabase.co';
     supabaseAnonKey ??= 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZpdWhobGN1ZGVtaWFkd2tmZWRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxMTk4MzAsImV4cCI6MjA4NDY5NTgzMH0.2uGA0hdmo04gX6ZUhLwMf-xzwGUX2E05DQ09K1QzZzg';
-    revenueCatKey ??= 'test_cSmQKOJPHQlcKzwICEFNWGotFNA';
+    revenueCatKey ??= 'appl_YSdwRSfuqHVlyoGuuwJmaNhzcAJ';    
     
     debugPrint('Supabase URL: $supabaseUrl');
     debugPrint('Supabase Key length: ${supabaseAnonKey.length} characters');
